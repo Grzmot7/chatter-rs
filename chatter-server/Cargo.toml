@@ -14,4 +14,4 @@ dotenv = "0.15.0"
 mysql = "20.1.0"
 
 serde = "1.0.61"
-serde_json = "1.0.118"
+serde_json = "1.0.59"

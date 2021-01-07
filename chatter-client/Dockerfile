@@ -1,5 +1,5 @@
 FROM rust:latest
 
-COPY chatter-client /opt/chatter-client
+COPY ./ /opt/chatter-client
 
-RUN cd /opt/chatter-client && cargo build
+RUN cd /opt/chatter-client

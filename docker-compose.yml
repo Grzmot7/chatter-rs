@@ -3,25 +3,25 @@ services:
     chatter-server:
         build: "./chatter-server"
         image: "chatter-server:latest"
-        container_name: chatter
+        container_name: chatter-server
         networks:
             - default
         ports:
             - "8088:8088"
         volumes:
-            - chatter-data:/opt
+            - chatter-server-data:/opt
             - ./chatter-server/src:/opt/chatter-server/src
         tty: true
     chatter-client:
-          build: "./chatter-client"
-          image: "chatter-client:latest"
-          container_name: "chatter-client"
-          networks:
+        build: "./chatter-client"
+        image: "chatter-client:latest"
+        container_name: chatter-client
+        networks:
             - default
-          volumes:
-            - chatter-client:/opt
-            -./chatter-server/src:/opt/chatter-client/src
-          tty: true
+        volumes:
+            - chatter-client-data:/opt
+            - ./chatter-server/src:/opt/chatter-client/src
+        tty: true
     db:
         image: "mysql:latest"
         container_name: db
@@ -32,7 +32,7 @@ services:
             - default
         volumes:
             - db-data:/var/lib/mysql
-            - ./db.sql:/docker-entrypoint-initdb.d
+            - ./db:/docker-entrypoint-initdb.d
 volumes:
     chatter-client-data:
     chatter-server-data:
