@@ -1,16 +1,16 @@
-use actix_web::{ App, Error, HttpResponse, HttpServer, Responder, web };
+#[macro_use] extern crate serde_json;
+#[macro_use] extern crate log;
+use actix_web::{get, web, App, Error, HttpResponse, HttpServer, Responder, Result as ActixResult};
 use actix_web::http::StatusCode;
-use mysql::params;
-use mysql::Pool;
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
+use mysql::*;
+use mysql::prelude::*;
 
-#[derive(Deserialize)]
-pub struct NewUserPayload {
-    username: String,
-}
+mod db_layer;
+use db_layer::{ NewUser, NewUserPayload, User };
 
 
-async fn home() -> Result<HttpResponse, Error> {
+async fn home() -> Result<HttpResponse> {
     Ok(
         HttpResponse::build(StatusCode::OK)
         .content_type("text/html; charset=utf-8")
@@ -18,45 +18,49 @@ async fn home() -> Result<HttpResponse, Error> {
     )
 }
 
-
-fn insert_new_user(conn: &mysql::PooledConn, new_user: NewUserPayload) -> Result<()> {
-    conn.exec_batch(
-        r"INSERT INTO users (username)
-          VALUES (:username)", new_user.iter().map(|u| params! {
-              "username" => &u.username,
-          })
-    )?;
-    Ok()
+async fn test() -> impl Responder {
+    HttpResponse::Ok().body("Hey there!")
 }
 
-async fn new_user_index(pool: web::Data<mysql::Pool>, body: web::Json<NewUserPayload>) -> impl Responder {
-    let conn = pool.get_conn();
+#[get("/{id}/{name}/index.html")]
+async fn index(web::Path((id, name)): web::Path<(u32, String)>) -> impl Responder {
+    info!("get/index");
+    format!("Hello {}! id:{}", name, id)
+}
 
-    let user = web::block(move || insert_new_user(&conn, &body))
-        .await
-        .map_err(|e| {
-            eprintln!("{}", e);
-            HttpResponse::InternalServerError().finish()
-        })?;
+async fn new_user(pool: web::Data<mysql::Pool>, body: web::Json<NewUserPayload>) -> ActixResult<HttpResponse> {
+    info!("adding new user:{}", &body.username);
 
-    Ok(HttpResponse::Ok())
+    let mut conn = pool.get_conn().unwrap();
 
+    let inserted = web::block(move ||
+        db_layer::insert_user(&mut conn, &body.username, &body.password))
+        .await.unwrap();
+
+    return Ok(HttpResponse::Ok().json(json!({
+        "success": true,
+        "user" : User {
+            username: inserted.username,
+            id: inserted.id,
+        },
+    })));
 }
 
 #[actix_rt::main]
-async fn main() -> std::io::Result<(), Error> {
-    let url = "mysql://root:password@db:3306/chatter_db";
+async fn main() -> std::io::Result<()> {
+    env_logger::init();
+    info!("Starting the server...");
 
-    let pool = Pool::new(url)?;
+    let pool = Pool::new("mysql://root:password@c-test-db:3306/chatter_db").unwrap();
 
     HttpServer::new(move || {
-        App::new::data(pool.clone())
-            .resource("/new_user", web::post().to(new_user_index))
-            .route("/", web::get().to(home))
+        App::new()
+        .data(pool.clone())
+        .service(index)
+        .route("/test", web::get().to(test))
+        .route("/user/new", web::post().to(new_user))
     })
-    .bind("127.0.0.1:8088")?
-    .run()
-    .await?
-
-    Ok()
+        .bind("0.0.0.0:8088")?
+        .run()
+        .await
 }

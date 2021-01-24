@@ -9,5 +9,5 @@ edition = "2018"
 [dependencies]
 reqwest = "0.10.8"
 tokio = { version = "1.0.1", features = ["full"] }
-serde = "1.0.61"
-serde_json = "1.0.118"
+serde = "1.0.94"
+serde_json = "1.0.59"

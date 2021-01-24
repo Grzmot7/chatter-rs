@@ -1,35 +1,10 @@
 use serde::{ Deserialize, Serialize };
 
-pub const URL: &str = "https://localhost:8088";
 
 struct NewUserPayload {
     username: String,
 }
 
-pub async fn home() -> Result<(), reqwest::Error> {
-    let url = "https://localhost:8088/"
-
-    let res = reqwest::get(&*url)
-        .await?;
-
-    println!("Status: {}", res.status());
-    println!("Headers:\n{:#?}", res.headers());
-
-    Ok()
-}
-
-pub async fn request_new_user(username: &str) -> Result<(), reqwest::Error> {
-    let payload = NewUserPayload { username: &username.to_string() };
-
-    let client = reqwest::Client::new();
-
-    let res = client.post(&*URL)
-                .body(serde_json::to_string(&payload))
-                .send()
-                .await?
-
-    Ok()
-}
 
 pub fn new_user_input() -> Result<()> {
 
