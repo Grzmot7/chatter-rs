@@ -19,7 +19,7 @@ async fn home() -> Result<HttpResponse> {
 }
 
 async fn test() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
+    HttpResponse::Ok().body("Hello from chatter server.")
 }
 
 #[get("/{id}/{name}/index.html")]
@@ -51,7 +51,7 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
     info!("Starting the server...");
 
-    let pool = Pool::new("mysql://root:password@c-test-db:3306/chatter_db").unwrap();
+    let pool = Pool::new("mysql://root:password@db:3306/chatter_db").unwrap();
 
     HttpServer::new(move || {
         App::new()

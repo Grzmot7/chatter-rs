@@ -1,5 +1,5 @@
 [package]
-name = "chatter-client"
+name = "chatter_client"
 version = "0.1.0"
 authors = ["jeffloos"]
 edition = "2018"
@@ -7,7 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = "0.10.8"
+reqwest = "0.11.0"
 tokio = { version = "1.0.1", features = ["full"] }
-serde = "1.0.94"
+serde = { version = "1.0.94", features = ["derive"] }
 serde_json = "1.0.59"
+log = "0.4.6"
+env_logger = "0.8.2"

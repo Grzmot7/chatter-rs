@@ -1,7 +1,7 @@
 version: '3'
 services:
     chatter-server:
-        build: "./chatter-server"
+        build: "./chatter_server"
         image: "chatter-server:latest"
         container_name: chatter-server
         networks:
@@ -10,17 +10,17 @@ services:
             - "8088:8088"
         volumes:
             - chatter-server-data:/opt
-            - ./chatter-server/src:/opt/chatter-server/src
+            - ./chatter_server/src:/opt/chatter_server/src
         tty: true
     chatter-client:
-        build: "./chatter-client"
+        build: "./chatter_client"
         image: "chatter-client:latest"
         container_name: chatter-client
         networks:
             - default
         volumes:
             - chatter-client-data:/opt
-            - ./chatter-server/src:/opt/chatter-client/src
+            - ./chatter_client/src:/opt/chatter_client/src
         tty: true
     db:
         image: "mysql:latest"
