@@ -22,6 +22,16 @@ services:
             - chatter-client-data:/opt
             - ./chatter_client/src:/opt/chatter_client/src
         tty: true
+    chatter-client-2:
+        build: "./chatter_client"
+        image: "chatter-client:latest"
+        container_name: chatter-client-2
+        networks:
+            - default
+        volumes:
+            - chatter-client-2-data:/opt
+            - ./chatter_client/src:/opt/chatter_client/src
+        tty: true
     db:
         image: "mysql:latest"
         container_name: db
@@ -35,5 +45,6 @@ services:
             - ./db:/docker-entrypoint-initdb.d
 volumes:
     chatter-client-data:
+    chatter-client-2-data:
     chatter-server-data:
     db-data:

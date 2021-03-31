@@ -1,12 +1,16 @@
+use std::sync::atomic::{ AtomicU64, Ordering }
 
 mod utils;
 mod requests;
+mod cui;
+mod events;
 
-#[tokio::main]
+static mut LOGGED: AtomicU64 = AtomicU64::new()
+
+#[async_std::main]
 async fn main() -> Result<(), reqwest::Error> {
 
-
-    requests::test_connection();
+   requests::test_connection().await;
 /*
     let test = requests::test_connection();
 
@@ -15,8 +19,11 @@ async fn main() -> Result<(), reqwest::Error> {
         Err(e) => panic!("Could not connect to the server."),
     };
 */
+    utils::menu().await;
+    
+    cui::chatting().await;
 
-    //utils::menu();
+    
 
     Ok(())
 }

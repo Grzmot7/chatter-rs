@@ -1,11 +1,29 @@
 CREATE DATABASE IF NOT EXISTS chatter_db; USE chatter_db;
 
 CREATE TABLE IF NOT EXISTS users (
-  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  username VARCHAR(15) NOT NULL,
-  pw VARCHAR(15) NOT NULL
-);
+  u_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(64) NOT NULL,
+  pw VARCHAR(64) NOT NULL,
+  status_tag TINYINT NOT NULL DEFAULT 0
+)engine=innodb;
 
+CREATE TABLE IF NOT EXISTS chatrooms (
+  c_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_1 VARCHAR(64),
+  user_2 VARCHAR(64),
+  user_id_3 BIGINT,
+  user_id_4 BIGINT,
+  user_id_5 BIGINT 
+)engine=innodb;
+
+CREATE TABLE IF NOT EXISTS messages (
+  m_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  c_id BIGINT NOT NULL,
+  author VARCHAR(64) NOT NULL,
+  tx_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  chat_message TEXT,
+  KEY c_id (c_id)
+)engine=innodb;
 
 INSERT INTO users (username, pw) VALUES ("odin6066", "password123");
 INSERT INTO users (username, pw) VALUES ("mightythor", "mjolnir123");
