@@ -1,11 +1,11 @@
-use std::sync::atomic::{ AtomicU64, Ordering }
+use std::sync::atomic::{ AtomicU64, Ordering };
 
 mod utils;
 mod requests;
 mod cui;
 mod events;
 
-static mut LOGGED: AtomicU64 = AtomicU64::new()
+static LOGGED: AtomicU64 = AtomicU64::new(0);
 
 #[async_std::main]
 async fn main() -> Result<(), reqwest::Error> {
@@ -21,7 +21,7 @@ async fn main() -> Result<(), reqwest::Error> {
 */
     utils::menu().await;
     
-    cui::chatting().await;
+    //cui::chatting().await;
 
     
 

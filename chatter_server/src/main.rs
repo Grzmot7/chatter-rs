@@ -7,7 +7,7 @@ use mysql::*;
 use mysql::prelude::*;
 
 mod db_layer;
-use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat };
+use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id };
 
 
 async fn home() -> Result<HttpResponse> {
@@ -163,7 +163,7 @@ async fn main() -> std::io::Result<()> {
         .route("/test", web::get().to(test))
         .route("/user/new", web::post().to(user_new))
         .route("/user/login", web::post().to(user_login))
-        .route("/get_chats", web::get().to(get_chats))
+        .route("/user/chats", web::get().to(get_chats))
         .route("/message/new", web::put().to(push_message))
         .route("/message/new_chat", web::put().to(new_chat))
         .route("/message/chatting", web::get().to(get_messages))

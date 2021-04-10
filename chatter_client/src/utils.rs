@@ -1,10 +1,13 @@
 use async_std::{ 
     sync::{ Arc, Mutex }, task, io 
 };
+use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{ Deserialize, Serialize };
 use serde_json::json;
 
 use crate::requests;
+use crate::LOGGED;
+use crate::cui;
 
 #[derive(Deserialize, Serialize)]
 pub struct NewUserPayload {
@@ -31,7 +34,7 @@ pub struct NewMessage {
 }
 
 pub struct LoggedUser {
-    pub id: u32,
+    pub id: u64,
     pub username: String,
 }
 
@@ -96,7 +99,7 @@ pub async fn login_input() {
     match login {
         Ok(u) => {
             LOGGED.store(u.id, Ordering::Relaxed);
-            logged_menu(u.username,);
+            logged_menu();
         },
         Err(m) => println!("{}", m)
     };
@@ -188,15 +191,12 @@ async fn chat_menu() {
         io::stdin().read_line(&mut input).await;
 
         match input.trim() {
-            "back" => {
-                exit();
-                break;
-            },
+            "back" => break,
             "chats" => chat_select().await,
             "new" => chat_new().await,
             _ => {},
         };
-    }
+    };
 
 }
 
@@ -205,36 +205,38 @@ async fn chat_select() {
 
     println!("Select chat:");
 
-    let input = String::new();
-
+    let mut input = String::new();
     let chats = requests::get_chats(logged_user).await;
     
-    match chats {
-        Ok(c) => for chat in c.iter() {
-            println!("{}", chat)
-        },
+    let chat = match chats {
+        Ok(c) => c,
         Err(m) => {
             println!("{}", m);
-            chat_menu();
-        }
-    }
+            return;
+        },
+    };
 
-    println!("Select chat, or type 'back'");
+    for c in chat.iter() {
+        println!("{}", c);
+    };
 
-    io::stdin().read_line(&mut input).await;
-    input.trim().parse().unwrap();
+    loop {
+        println!("Select chat, or type 'back'");
 
-    let mut select = loop {
-        match {
+        io::stdin().read_line(&mut input).await;
 
-        }
-    }
-
-    for chat in chats.iter() {
-        if chat = input {
-
-        }
-    }
+        let selection = match input.trim() {
+            "back" => return,
+            sel => sel,
+        };
+        
+        let select: u64 = selection.parse().unwrap();
+        
+        if chat.contains(&select) {
+            //cui::chatting(select);
+            println!("{}", select);
+        };
+    };
 }
 
 async fn chat_new() {

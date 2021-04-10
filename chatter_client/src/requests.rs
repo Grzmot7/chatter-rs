@@ -1,10 +1,11 @@
 use serde_json::json;
-
+use serde::{ Deserialize, Serialize };
 use crate::utils;
 
-struct ServerResp<P> {
+#[derive(Serialize, Deserialize)]
+struct ChatsPayload {
         success: bool,
-        message: Option<P>,
+        message: Option<Vec<u64>>,
 }
 
 pub async fn request_new_user(user: utils::NewUserPayload) {
@@ -34,72 +35,81 @@ pub async fn request_login(user: utils::NewUserPayload) -> Result<utils::LoggedU
                 .send()
                 .await;
 
-        match res {
-                Ok(_) => {},
+        let response = match res {
+                Ok(r) => r.text().await,
                 Err(_) => {
                         let err_m = String::from("Server connection error.");
                         return Err(err_m);
                 },
         };
 
+
         let payload: utils::LoginPayload = serde_json::from_str(
-                res.text()
+                &response.unwrap()
                 .to_string()
+        )
                 .expect("Something went wrong serialiing web json.");
 
         match payload.success {
                 true => return { Ok(
-                        LoggedUser {
+                        utils::LoggedUser {
                                 id: payload.id,
                                 username: payload.username,
                         }
                 )},
-                false => return {
+                false => {
                         let err_m = String::from("Bad username or password");
                         return Err(err_m);
                 },
-        }
+        };
 }
 
 pub async fn get_chats(id: u64) -> Result<Vec<u64>, String> {
         let client = reqwest::Client::new();
-        let mut chat_list: Vec<(u64)> = Vec::new();
         let mut err_m = String::new();
         
         let res = client.post("http/://chatter-server:8088/user/chats")
                 .header("Content-Type", "application/json")
                 .body(json!({
                         "id": id,
-                }
+                })
+                        .to_string()
                 )
                 .send()
                 .await;
 
-        match res {
-                Ok(_) => res.text(),
+        let payload = match res {
+                Ok(r) => r.text().await,
                 Err(_) => {
                         let err_m = String::from("Server connection error.");
                         return Err(err_m);
                 },
         };
 
-        let payload: ServerResp = serde_json::from_str(&res.to_string()).expect("something went wrong serializing web json");
-        if let Some(p) = payload.message {
-                match payload.success {
-                        true => {
-                                let chat_list = serde_json::from_str(&payload.message).expect("something went wrong serializing chat list json.");
-                                return Ok(chat_list);
-                        }
-                        false => { 
-                                let err_m = String::from("Error retrieving chat list");
+        let payload = match payload {
+                Ok(r) => r,
+                Err(_) => {
+                        let err_m = String::from("Error in response body.");
+                        return Err(err_m);
+                },
+        };
+
+        let chats: ChatsPayload = serde_json::from_str(&payload.to_string()).expect("something went wrong serializing web json");
+
+        match chats.success {
+                true => {
+                        if let Some(p) = chats.message {
+                                return Ok(p);
+                        } else {
+                                let err_m = String::from("You don't have any chats yet, creat a new chat.");
                                 return Err(err_m);
-                        }
-                }
-        } else {
-                let err_m = String::from("You do not have any chats yet");
-                return Err(err_m);
-        }
-        let body = res.text().unwrap();
+                        };
+                },
+                false => {
+                        let err_m = String::from("Error retrieving chat list");
+                        return Err(err_m);
+                },
+        };
 }
 
 pub async fn post_message(message: utils::NewMessage) {
@@ -108,7 +118,7 @@ pub async fn post_message(message: utils::NewMessage) {
                 .header("Content_Type", "applications/json")
                 .body(json!(
                         {
-                        "c_id": message.chat,
+                        "c_id": message.c_id,
                         "message": message.message,
                         "author": message.username,
                         }
