@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::io::ErrorKind;
 #[macro_use] extern crate serde_json;
 #[macro_use] extern crate log;
 use actix_web::{get, web, App, Error, HttpResponse, HttpServer, Responder, Result as ActixResult};
@@ -7,7 +9,7 @@ use mysql::*;
 use mysql::prelude::*;
 
 mod db_layer;
-use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id };
+use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id, LoginUser };
 
 
 async fn home() -> Result<HttpResponse> {
@@ -29,17 +31,41 @@ async fn index(web::Path((id, name)): web::Path<(u32, String)>) -> impl Responde
 }
 
 async fn user_new(pool: web::Data<mysql::Pool>, body: web::Json<NewUserPayload>) -> ActixResult<HttpResponse> {
-    info!("adding new user:{}", &body.username);
+    info!("Attempting to add new user: {}", &body.username);
 
-    let mut conn = pool.get_conn().unwrap();
+    let mut conn = pool.get_conn();
+
+    let mut conn = match conn {
+        Ok(c) => c,
+        Err(_) => return Ok(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "Internal server error: could not connect to database",
+        }))),
+    };
 
     let inserted = web::block(move ||
-        db_layer::insert_user(&mut conn, &body.username, &body.password))
-        .await.unwrap();
+        db_layer::insert_user(&mut conn, body.into_inner()))
+        .await;
+
+    let inserted = match inserted {
+        Ok(i) => i,
+        Err(_) => return Ok(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "Internal server error: internal database connection error.",
+        }))),
+    };   
+
+    //let payload = match inserted {
+    //    Ok(i) => i,
+    //    Err(e) => return Ok(HttpResponse::BadRequest().json(json!({
+    //        "success": false,
+    //        "message": e,
+    //    }))),
+    //};
 
     return Ok(HttpResponse::Ok().json(json!({
         "success": true,
-        "user" : User {
+        "message" : User {
             username: inserted.username,
             id: inserted.id,
         },
@@ -49,81 +75,141 @@ async fn user_new(pool: web::Data<mysql::Pool>, body: web::Json<NewUserPayload>)
 async fn user_login(pool: web::Data<mysql::Pool>, user: web::Json<NewUserPayload>) -> ActixResult<HttpResponse> {
     info!("Attempting to login user: {:?}", &user.username);
 
-    let mut conn = pool.get_conn().unwrap();
+    let mut conn = pool.get_conn();
+
+    let mut conn = match conn {
+        Ok(c) => c,
+        Err(_) => return Ok(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "Internal server error: could not connect to database",
+        }))),
+    };
 
     let login = web::block(move || 
-        db_layer::login(&mut conn, user.into_inner())).await.unwrap();
+        db_layer::login(&mut conn, user.into_inner())).await;
 
-    if let Some(u) = login {
-        return Ok(HttpResponse::Ok().json(json!({
+
+    let login = match login {
+        Ok(l) => return Ok(HttpResponse::Ok().json(json!({
             "success": true,
-            "message": User {
-                username: u.username,
-                id: u.id,
-            },
-        })));
+            "message": l,
+        }))),
+        Err(e) =>  match e {
+            actix_web::error::BlockingError => return Ok(HttpResponse::InternalServerError().json(json!({
+                "success": false,
+                "message": "Internal server error: internal database error.",
+            }))),
+            other_error => return Ok(HttpResponse::BadRequest().json(json!({
+                "success": false,
+                "message": other_error
+            }))),
+        },
     };
-    return Ok(HttpResponse::BadRequest().json(json!({
-        "success": false,
-        "message": "invalid username or password",
-    })));
 }
 
-async fn new_chat(pool: web::Data<mysql::Pool>, chat: web::Json<NewChat>) -> ActixResult<HttpResponse> {
-    let mut conn = pool.get_conn().unwrap();
+async fn new_chat(pool: web::Data<mysql::Pool>, chat: web::Json<NewMessage>) -> ActixResult<HttpResponse> {
+    let mut conn = pool.get_conn();
+
+    let mut conn = match conn {
+        Ok(c) => c,
+        Err(_) => return Ok(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "Internal server error: could not connect to database",
+        }))),
+    };
 
     let newchat = web::block(move || 
-        db_layer::insert_chat(&mut conn, chat.into_inner())
-    );
+        db_layer::insert_message(&mut conn, chat.into_inner()
+    )).await;
 
-    return Ok(HttpResponse::Ok().json(json!({
-        "success": true,
-        "message": newchat,
-    })));
+    match newchat {
+        Ok(n) => return Ok(HttpResponse::Ok().json(json!({
+            "success": true,
+            "message": n,
+        }))),
+        Err(_) => return Ok(HttpResponse::BadRequest().json(json!({
+            "success": false,
+            "message": "Could not create chat"
+        }))),
+    };
 }
 
 async fn get_chats(pool: web::Data<mysql::Pool>, user: web::Json<Id>) -> ActixResult<HttpResponse> {
-    let mut conn = pool.get_conn().unwrap();
+    let mut conn = pool.get_conn();
+
+    let mut conn = match conn {
+        Ok(c) => c,
+        Err(_) => return Ok(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "Internal server error: could not connect to database",
+        }))),
+    };
 
     let chat_list = web::block(move ||
         db_layer::user_chats(&mut conn, user.id)
-    );
+    ).await;
 
-    match chat_list {
-        Ok(list) => return Ok(HttpResponse::Ok().json(json!({
-            "success": true,
-            "chat list": json!(list)
-        }))),
-        Err(e) => return Ok(HttpResponse::Ok().json(json!({
+    //let chat_list: Vec<u64> = match chat_list {
+    //    Ok(c) => c,
+    //    Err(m) => return Ok(HttpResponse::BadRequest().json(json!({
+    //        "success": false,
+    //        "message": m,
+    //    }))),
+    //};
+
+    if chat_list.is_err() {
+        return Ok(HttpResponse::BadRequest().json(json!({
+                    "success": false,
+                    "message": chat_list.unwrap(),
+                })))
+    }
+
+    let chats: HashMap<u64, String> = chat_list.unwrap();
+
+    if chats.len() == 0 {
+        return Ok(HttpResponse::BadRequest().json(json!({
             "success": false,
-            "message": "error retrieving chat list"
-        }))),
+            "message": "User does not have any chats yet",
+        })));
+    } else {
+        return Ok(HttpResponse::Ok().json(json!({
+            "success": true,
+            "message": json!(chats),
+        })));
     }
 }
 
-async fn get_messages(pool: web::Data<mysql::Pool>, c_id: web::Json<u64>) -> ActixResult<HttpResponse> {
-    let mut conn = pool.get_conn().unwrap();
-
-    let messages = web::block(move || 
-        db_layer::show_chats(&mut conn, c_id)
-    );
-
-    match messages {
-        Ok(m) => return Ok(HttpResponse::Ok().json(json!(
-            "success": true,
-            "messages": messages,
-        ))),
-        Err(_) => return Ok(HttpResponse::Ok().json(json!(
-            "success": false,
-            "message": "error retrieving messages",
-        ))),
-    };
-}
+//async fn get_messages(pool: web::Data<mysql::Pool>, c_id: web::Json<u64>) -> ActixResult<HttpResponse> {
+//    let mut conn = pool.get_conn().unwrap();
+//
+//    let messages = web::block(move || 
+//        db_layer::show_messages(&mut conn, c_id)
+//    ).await;
+//
+//    match messages {
+//        Ok(m) => return Ok(HttpResponse::Ok().json(json!({
+//            "success": true,
+//            "messages": messages,
+//        }))),
+//        Err(_) => return Ok(HttpResponse::BadRequest().json(json!({
+//            "success": false,
+//            "message": "error retrieving messages",
+//        }))),
+//    };
+//}
 
 async fn push_message(pool: web::Data<mysql::Pool>, message: web::Json<NewMessage>) -> ActixResult<HttpResponse> {
     info!("Attempting to insert message for chat: {:?}", &message.c_id);
 
-    let mut conn = pool.get_conn().unwrap();
+    let mut conn = pool.get_conn();
+
+    let mut conn = match conn {
+        Ok(c) => c,
+        Err(_) => return Ok(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "Internal server error: could not connect to database",
+        }))),
+    };
     
     let inserted = web::block(move || 
         db_layer::insert_message(&mut conn, message.into_inner()))
@@ -161,12 +247,12 @@ async fn main() -> std::io::Result<()> {
         .data(pool.clone())
         .service(index)
         .route("/test", web::get().to(test))
-        .route("/user/new", web::post().to(user_new))
+        .route("/user/new", web::put().to(user_new))
         .route("/user/login", web::post().to(user_login))
         .route("/user/chats", web::get().to(get_chats))
         .route("/message/new", web::put().to(push_message))
         .route("/message/new_chat", web::put().to(new_chat))
-        .route("/message/chatting", web::get().to(get_messages))
+        //.route("/message/chatting", web::get().to(get_messages))
     })
         .bind("0.0.0.0:8088")?
         .run()

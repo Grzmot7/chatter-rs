@@ -60,7 +60,7 @@ pub async fn menu() {
         let mut input = String::new();
         io::stdin().read_line(&mut input).await;
 
-        match input.trim() {
+        match input.trim().to_lowercase() {
             "login" => login_input().await,
             "signup" => new_user_input().await,
             "exit" => {
@@ -79,6 +79,7 @@ pub async fn login_input() {
     let mut pass = String::new();
     let mut name = String::new();
 
+    println!("Login:\n");
     println!("Enter username:");
 
     io::stdin().read_line(&mut input1).await.unwrap();
@@ -92,7 +93,7 @@ pub async fn login_input() {
 
     let login = 
         requests::request_login(NewUserPayload {
-            username: name.to_string(),
+            username: name.to_lowercase().to_string(),
             password: pass.to_string(),
         }).await;
 
@@ -125,8 +126,7 @@ pub async fn logged_menu() {
 }
 
 pub async fn new_user_input() {
-    let input = String::new();
-
+   println!("New user:\n");
     let name: String =
         loop {
             println!("Enter new username:");
@@ -146,7 +146,7 @@ pub async fn new_user_input() {
                 },
                 i => {
                     println!("Entered username: {}", i);
-                    break i.to_string();
+                    break i.to_lowercase().to_string();
                 },
             };
         };
@@ -176,10 +176,15 @@ pub async fn new_user_input() {
                 };
             };
 
-        requests::request_new_user(NewUserPayload {
+        let response = requests::request_new_user( NewUserPayload {
             username: name,
             password: pass,
         }).await;
+
+        match response {
+            Ok(r) => println!("New user created."),
+            Err(e) => println!("{}", e),
+        };
 }
 
 async fn chat_menu() {
@@ -243,6 +248,12 @@ async fn chat_new() {
     println!("Enter recipients");
 
     let mut input = String::new();
+    
+    io::stdin().read_line(&mut input).await;
+
+    let user = LOGGED.load(Ordering::Relxed);
+
+    let newchat = requests::put_new_chat();
 
 }
 

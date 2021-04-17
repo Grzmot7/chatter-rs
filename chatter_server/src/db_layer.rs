@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use mysql::*;
 use mysql::prelude::*;
+
+
 
 #[derive(Serialize, Deserialize)]
 pub struct NewMessage {
@@ -43,6 +46,11 @@ pub struct User {
     pub username: String,
 }
 
+pub struct LoginUser {
+    pub id: Option<u64>,
+    pub username: Option<String>,
+}
+
 #[derive(Deserialize)]
 pub struct Id{
     pub id: u64,
@@ -54,7 +62,6 @@ pub struct NewChat {
     pub user_2: u64,
 }
 
-
 pub fn insert_message(conn: &mut mysql::PooledConn, msg: NewMessage) -> Result<u64> {
     conn.exec_drop(
         "INSERT INTO messages (message, author, c_id) VALUES (message=:message, author=:author, c_id=:c_id)",
@@ -64,110 +71,153 @@ pub fn insert_message(conn: &mut mysql::PooledConn, msg: NewMessage) -> Result<u
             "c_id" => &msg.c_id,
         }
     );
+
     Ok(conn.last_insert_id())
 }
 
-pub fn select_messages(conn: &mut mysql::PooledConn, c_id: u64) -> std::result::Result<Vec<Messages>, mysql::error::Error> {
-    let mut stmt = conn.prep(
-        "SELECT m_id, chat_message, author FROM messages WHERE c_id=:c_id ORDER BY m_id LIMIT 10"
+//pub fn select_messages(conn: &mut mysql::PooledConn, c_id: u64) -> std::result::Result<Vec<Messages>, mysql::error::Error> {
+//    let mut stmt = conn.prep(
+//        "SELECT m_id, chat_message, author FROM messages WHERE c_id=:c_id ORDER BY m_id LIMIT 10"
+//    );
+//
+//    conn.exec_map(&stmt, 
+//        params! {
+//            "c_id" => c_id,
+//        },
+//        |(m_id, message, author)| Messages {
+//            message: message,
+//            author: author,
+//        }
+//    )
+//}
+
+pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<HashMap<u64, String>, String> {
+    let username: Result<Option<u64>> = conn.exec_first(
+        "SELECT username FROM users WHERE u_id=:user",
+        params! {
+            "u_id" => id,
+        }
     );
 
-    conn.exec_map(&stmt, 
-        params! {
-            "c_id" => c_id,
-        },
-        |(m_id, chat_message, author)| Messages {
-            message: message,
-            author: author,
-        }
-    )
-}
+    let username = match username {
+        Ok(u) => u,
+        Err(_) => return Err(String::from("Database error.")),
+    };
 
-pub fn user_chats(conn: &mut mysql::PooledConn, user: User) -> std::result::Result<Vec<u64>> {
+    if let Some(n) = username {
+        let username = n;
+    } else {
+        return Err(String::from("Author not recognized.") );
+    };
+
     let mut stmt = conn.prep(
-        "SELECT m_id, author, chat_message WHERE user_1 OR user_2 = (:username)"
+        "SELECT c_id FROM chatrooms WHERE user_1=:user OR user_2=:user"
     ).unwrap();
 
-    conn.exec_map(stmt, 
+    let user_chats: Result<Vec<u64>> = conn.exec(stmt, 
         params! {
-            "username" => user.username,
+            "user" => username,
         }
-    )
+    );
+
+    let user_chats = match user_chats {
+        Ok(c) => c,
+        Err(_) => return Err(String::from("Database error.")),
+    };
+
+    if user_chats.len() == 0 {
+        return Err(String::from("User does not have any chats yet."));
+    };
+
+    let mut stmt = conn.prep(
+        "SELECT (user_1, user_2) FROM chatrooms WHERE user_1=:user OR user_2=:user"
+    ).unwrap();
+
+    let participents: Result<Vec<(String, String)>> = conn.exec(stmt, 
+        params!{
+            "user" => username,
+        }
+    );
+
+    let participents = match participents {
+        Ok(p) => p,
+        Err(_) => return Err(String::from("Database error.")),
+    };
+
+    let recips: Vec<String> = participents.iter().map(|x| 
+        match &x.0 {
+            username => x.1.to_string(),
+            _ => x.0.to_string(),
+        }
+    ).collect();
+
+    let chat_list: HashMap<u64, String> = user_chats.into_iter().zip(recips.into_iter()).collect();
+
+    Ok(chat_list)
+
 }
 
-pub fn find_product_in_price_range(
-    conn: &mut PooledConn,
-    price_from: f32,
-    price_to: f32) -> std::result::Result<Vec<Product>, mysql::error::Error> {
-    conn.exec_map(
-        "select product_id, product_code, price, name, last_update from PRODUCT where price>=:price_from and price <=:price_to",
-        params! {
-            "price_from" => price_from,
-            "price_to" => price_to,
-        },
-        |(product_id, product_code, price, name, last_update)| Product {
-            id: product_id,
-            code: product_code,
-            price: price,
-            product_name: name,
-            last_changed_on: last_update
-        }
-    )
+pub fn show_messages() {
+
 }
 
-pub fn login(conn: &mut mysql::PooledConn, login: NewUserPayload) -> Result<Option<User>> {
+
+pub fn login(conn: &mut mysql::PooledConn, login: NewUserPayload) -> std::result::Result<u64, String> {
     let qry = conn.exec_first(
-        "SELECT id, username FROM users WHERE username=:username AND pw=:password",
+        "SELECT id FROM users WHERE username=:username AND pw=:password",
         params!{
             "username" => &login.username,
             "password" => &login.password,
-        })
-        .map(|row| {
-            row.map(|(id, username)| User {
-                id: id,
-                username: username
-            })
         });
+        
+        let qry = match qry {
+            Ok(q) => q,
+            Err(_) => return Err(String::from("Database error.")),
+        };
+
+        if let Some(q) = qry {
+            return Err(String::from("Bad username or password"));
+        };
+
         return Ok(qry.unwrap());
 }
 
-fn select_user(pool: mysql::Pool, uname: &str) {
-    let mut conn = pool.get_conn().unwrap();
-
-    let res = conn
-        .exec_first("SELECT id, username FROM users WHERE username=:username",
+pub fn insert_user(conn: &mut mysql::PooledConn, user: NewUserPayload) -> std::result::Result<User, String> {
+    let check: Result<Option<u64>> = conn.exec_first(
+        "SELECT u_id FROM users WHERE username=:username",
         params! {
-            "username" => uname,
-        })
-        .map(|row| {
-            row.map(|(id, username)| User {
-                id: id,
-                username: username,
-            })
-        });
+            "username" => user.username,
+        }
+    );
 
-    match res.unwrap() {
-        Some(user) => println!("Returned user:\nid: {:?}\nUsername: {:?}", user.id, user.username),
-        None => println!("User not found."),
+    let check = match check {
+        Ok(c) => c,
+        Err(_) => return Err(String::from("Database error.")),
     };
-}
 
-pub fn insert_user(conn: &mut mysql::PooledConn, uname: &String, pass: &String) -> Result<User> {
-
-    let user = NewUserPayload {
-        username: String::from(uname),
-        password: String::from(pass),
+    if let Some(u) = check {
+        let err_m = String::from("User already exists");
+        return Err(err_m);
     };
 
     let mut stmt = conn.prep(
         "INSERT INTO users (username, pw) VALUES (:username, :pw)"
-        )
-        .unwrap();
+        );
+
+    let stmt = match stmt {
+        Ok(s) => s,
+        Err(_) => return Err(String::from("Database error.")),
+    };
 
     conn.exec_drop(&stmt, params! {
         "username" => &user.username,
         "pw" => &user.password,
-    }).unwrap();
+    });
+
+    //let conn = match conn {
+    //    Ok(c) => c,
+    //    Err(_) => return Err(String::from("Database error: error inserting user.")),
+    //};
 
     let new_id = conn.last_insert_id();
 
@@ -177,17 +227,5 @@ pub fn insert_user(conn: &mut mysql::PooledConn, uname: &String, pass: &String) 
     };
 
     return Ok(inserted_user);
-
 }
 
-//works (streamed query), no route, not implemented
-fn show_all_users(pool: mysql::Pool) {
-    let mut conn = pool.get_conn().unwrap();
-
-    conn.query_iter("SELECT id, username, pw FROM users")
-    .unwrap()
-    .for_each(|row| {
-        let r:(i32, String, String) = from_row(row.unwrap());
-        println!("{}, {}, {:?}", r.0, r.1, r.2);
-    });
-}

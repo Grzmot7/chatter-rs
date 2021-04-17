@@ -10,10 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS chatrooms (
   c_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   user_1 VARCHAR(64),
-  user_2 VARCHAR(64),
-  user_id_3 BIGINT,
-  user_id_4 BIGINT,
-  user_id_5 BIGINT 
+  user_2 VARCHAR(64)
 )engine=innodb;
 
 CREATE TABLE IF NOT EXISTS messages (
