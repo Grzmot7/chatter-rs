@@ -11,17 +11,17 @@ struct ChatsPayload {
 
 #[derive(Serialize, Deserialize)]
 struct ServResponse {
-        success: bool,
         message: String,
+        success: bool,
 }
 
 #[derive(Serialize, Deserialize)]
 struct ChatHash {
-        map: Hashmap<u64, String>,
+        c_list: HashMap<u64, String>,
 }
 
 
-pub async fn request_new_user(user: utils::NewUserPayload) -> Result<String> {
+pub async fn request_new_user(user: utils::NewUserPayload) -> Result<String, String> {
         let client = reqwest::Client::new();
         let res = client.put("http://chatter-server:8088/user/new")
                 .header("Content-Type", "application/json")
@@ -30,29 +30,27 @@ pub async fn request_new_user(user: utils::NewUserPayload) -> Result<String> {
                 .await;
 
         let res = match res {
-                Ok(r) => r.text().await,
+                Ok(r) => r,
                 Err(_) => return Err(String::from("Could not connect to server.")),
         };
 
-        let res = match res {
+        let res = match res.text().await {
                 Ok(r) => r,
                 Err(_) => return Err(String::from("Server response error.")),
         };
 
-        let payload: ServResponse = serde_json::from_str(res.to_string());
+        println!("{}", res);   
+        let payload: Result<ServResponse, serde_json::Error> = serde_json::from_str(&res.to_string());
 
         let payload = match payload {
                 Ok(p) => p,
                 Err(_) => return Err(String::from("Error serializing web json.")),
-        }
+        };
 
         match payload.success {
                 true => return Ok(payload.message),
                 false => return Err(payload.message),
         };
-
-        
-
 }
 
 pub async fn test_connection() {
@@ -65,7 +63,7 @@ pub async fn test_connection() {
         println!("Body:\n{}", body);
 }
 
-pub async fn request_login(user: utils::NewUserPayload) -> Result<utils::LoggedUser, String> {
+pub async fn request_login(user: utils::NewUserPayload) -> Result<String, String> {
         let client = reqwest::Client::new();
         let res = client.post("http://chatter-server:8088/user/login")
                 .header("Content-Type", "application/json")
@@ -74,31 +72,30 @@ pub async fn request_login(user: utils::NewUserPayload) -> Result<utils::LoggedU
                 .await;
 
         let response = match res {
-                Ok(r) => r.text().await,
+                Ok(r) => r,
                 Err(_) => {
                         let err_m = String::from("Server connection error.");
                         return Err(err_m);
                 },
         };
 
+        let resp = response.text().await;
 
-        let payload: utils::LoginPayload = serde_json::from_str(
-                &response.unwrap()
-                .to_string()
-        );
+        let resp = match resp {
+                Ok(r) => r,
+                Err(_) => return Err(String::from("Server response error.")),
+        };     
+        println!{"{}",resp}
+        let payload: ServResponse = serde_json::from_str(resp.as_str()).expect("Error serializing login payload.");
 
-        let payload = match payload {
-                Ok(p) => p,
-                Err(_) => return Err(String::from("Error serializing web json.")),
-        };
+
+        //let payload = match payload {
+        //        Ok(p) => p,
+        //        Err(_) => return Err(String::from("Error serializing web json.")),
+        //};
 
         match payload.success {
-                true => return { Ok(
-                        utils::LoggedUser {
-                                id: payload.id,
-                                username: payload.username,
-                        }
-                )},
+                true => return Ok(payload.message),
                 false => {
                         let err_m = String::from("Bad username or password");
                         return Err(err_m);
@@ -106,9 +103,9 @@ pub async fn request_login(user: utils::NewUserPayload) -> Result<utils::LoggedU
         };
 }
 
-pub async fn get_chats(id: u64) -> Result<Vec<u64>, String> {
+pub async fn get_chats(id: u64) -> Result<HashMap<u64, String>, String> {
         let client = reqwest::Client::new();
-        let mut err_m = String::new();
+  
         
         let res = client.post("http/://chatter-server:8088/user/chats")
                 .header("Content-Type", "application/json")
@@ -119,7 +116,7 @@ pub async fn get_chats(id: u64) -> Result<Vec<u64>, String> {
                 )
                 .send()
                 .await;
-
+        
         let payload = match res {
                 Ok(r) => r.text().await,
                 Err(_) => {
@@ -138,10 +135,9 @@ pub async fn get_chats(id: u64) -> Result<Vec<u64>, String> {
 
         let chats: ServResponse = serde_json::from_str(&payload.to_string()).expect("something went wrong serializing web json");
 
-        match chats.success {
-                true => {
-                        let pkg: ChatHash = serde_json:::from_str(&chats.message),
-                }
+
+        let pkg: Result<ChatHash, serde_json::Error> =  match chats.success {
+                true => serde_json::from_str(&chats.message),
                 false => {
                         let err_m = String::from("Error retrieving chat list");
                         return Err(err_m);
@@ -149,15 +145,15 @@ pub async fn get_chats(id: u64) -> Result<Vec<u64>, String> {
         };
 
         match pkg {
-                Ok(p) => return Ok(p.into_inner()),
-                Err(_) => return String::from("Error serializing chat hashmap.");
+                Ok(p) => return Ok(p.c_list),
+                Err(_) => return Err(String::from("Error serializing chat hashmap.")),
         };
 }
 
-pub async fn put_new_chat(user_1: u64, user_2: String) -> Result<String> {
+pub async fn put_new_chat(user_1: u64, user_2: String) -> Result<String, String> {
         let client = reqwest::Client::new();
-        let res = client.put("http//chatter-server:8088/message/new_chat")
-                .header("Content_Type", "applications/json")
+        let res = client.put("http://chatter-server:8088/message/new_chat")
+                .header("Content-Type", "application/json")
                 .body(json!(
                         {
                         "u_id_1": user_1,
@@ -175,10 +171,19 @@ pub async fn put_new_chat(user_1: u64, user_2: String) -> Result<String> {
                 },
         };
 
-        let payload = match res {
-                Ok
-        }
+        let payload = match res.text().await {
+                Ok(p) => p,
+                Err(_) => return Err(String::from("Error extracting response body.")),
+        };
 
+        println!("{}", payload);
+        
+        let payload: ServResponse = serde_json::from_str(&payload).expect("Error in serializing web response.");
+
+        match payload.success {
+                true => return Ok(payload.message),
+                false => return Err(payload.message),
+        };
 
 }
 

@@ -2,8 +2,13 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use mysql::*;
 use mysql::prelude::*;
+use log::info;
 
-
+#[derive(Serialize, Deserialize)]
+pub struct NewChatroom {
+    pub u_id_1: u64,
+    pub u_name_2: String,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct NewMessage {
@@ -58,8 +63,8 @@ pub struct Id{
 
 #[derive(Serialize, Deserialize)]
 pub struct NewChat {
-    pub user_1: u64,
-    pub user_2: u64,
+    pub u_id_1: u64,
+    pub u_name_2: String,
 }
 
 pub fn insert_message(conn: &mut mysql::PooledConn, msg: NewMessage) -> Result<u64> {
@@ -73,6 +78,56 @@ pub fn insert_message(conn: &mut mysql::PooledConn, msg: NewMessage) -> Result<u
     );
 
     Ok(conn.last_insert_id())
+}
+
+
+pub fn insert_chatroom(conn: &mut mysql::PooledConn, chat: NewChatroom) -> std::result::Result<String, String> {
+    let user: Result<Option<String>> = conn.exec_first(
+        "SELECT username FROM users WHERE u_id=:user",
+        params! {
+            "user" => chat.u_id_1,
+        }
+    );
+
+    let user = match user {
+        Ok(r) => match r {
+            Some(u) => u,
+            None => return Err(String::from("Author not found.")),
+        },
+        Err(_) => return Err(String::from("Database error.")),
+    };
+
+    let mut stmt = conn.prep(
+        "SELECT c_id FROM chatrooms WHERE user_1 OR user_2 =:user_1
+            AND user_1 OR user_2 =:user_2"
+    ).unwrap();
+
+    let c_id: Result<Option<u64>> = conn.exec_first(stmt, params! {
+        "user_1" => &user,
+        "user_2" => &chat.u_name_2,
+    });
+
+    match c_id {
+        Ok(i) => match i {
+            Some(c) => return Err(String::from("Chatroom already exists.")),
+            None =>{},
+        },
+        Err(_) => return Err(String::from("Database error.")),
+    };
+
+    let mut stmt = conn.prep(
+        "INSERT INTO chatrooms (user_1, user_2) VALUES (:user_1, :user_2)"
+    ).unwrap();
+
+    conn.exec_drop( &stmt, params! {
+        "user_1" => user,
+        "user_2" => chat.u_name_2,
+    }).unwrap();
+
+    match conn.last_insert_id() {
+        0 => return Err(String::from("Could not insert chatroom.")),
+        _ => return Ok(String::from("Chatroom created.")),
+    };
 }
 
 //pub fn select_messages(conn: &mut mysql::PooledConn, c_id: u64) -> std::result::Result<Vec<Messages>, mysql::error::Error> {
@@ -105,7 +160,7 @@ pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<
     };
 
     if let Some(n) = username {
-        let username = n;
+        username.unwrap();
     } else {
         return Err(String::from("Author not recognized.") );
     };
@@ -162,9 +217,11 @@ pub fn show_messages() {
 }
 
 
-pub fn login(conn: &mut mysql::PooledConn, login: NewUserPayload) -> std::result::Result<u64, String> {
+pub fn login(conn: &mut mysql::PooledConn, login: NewUserPayload) -> std::result::Result<User, String> {
+    info!("login: user: {}, {}", &login.username, &login.password);
+    
     let qry = conn.exec_first(
-        "SELECT id FROM users WHERE username=:username AND pw=:password",
+        "SELECT u_id FROM users WHERE username=:username AND pw=:password",
         params!{
             "username" => &login.username,
             "password" => &login.password,
@@ -175,18 +232,21 @@ pub fn login(conn: &mut mysql::PooledConn, login: NewUserPayload) -> std::result
             Err(_) => return Err(String::from("Database error.")),
         };
 
-        if let Some(q) = qry {
+        if let None = qry {
             return Err(String::from("Bad username or password"));
         };
 
-        return Ok(qry.unwrap());
+        return Ok(User {
+            id: qry.unwrap(),
+            username: login.username, 
+        });
 }
 
 pub fn insert_user(conn: &mut mysql::PooledConn, user: NewUserPayload) -> std::result::Result<User, String> {
     let check: Result<Option<u64>> = conn.exec_first(
         "SELECT u_id FROM users WHERE username=:username",
         params! {
-            "username" => user.username,
+            "username" => &user.username,
         }
     );
 

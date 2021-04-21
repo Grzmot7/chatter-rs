@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use async_std::{ 
     sync::{ Arc, Mutex }, task, io 
 };
@@ -60,7 +61,7 @@ pub async fn menu() {
         let mut input = String::new();
         io::stdin().read_line(&mut input).await;
 
-        match input.trim().to_lowercase() {
+        match input.trim().to_lowercase().as_str() {
             "login" => login_input().await,
             "signup" => new_user_input().await,
             "exit" => {
@@ -99,16 +100,22 @@ pub async fn login_input() {
 
     match login {
         Ok(u) => {
-            LOGGED.store(u.id, Ordering::Relaxed);
-            logged_menu();
+            LOGGED.store(u.parse::<u64>().unwrap(), Ordering::Relaxed);
+            logged_menu().await
         },
-        Err(m) => println!("{}", m)
+        Err(m) => {
+            println!("{}", m);
+            return;
+        },
     };
+
+
+    return;
 }
 
 pub async fn logged_menu() {
     loop {
-        println!("Menu: show, add, exit");
+        println!("Menu: chat, exit");
 
         let mut input = String::new();
 
@@ -140,7 +147,7 @@ pub async fn new_user_input() {
                     println!("Entered username too long.");
                     {};
                 },
-                i if i.len() < 6 => {
+                i if i.len() < 2 => {
                     println!("Entered username too short.");
                     {};
                 },
@@ -165,7 +172,7 @@ pub async fn new_user_input() {
                         println!("Entered password too long.");
                         {};
                     },
-                    i if i.len() < 6 => {
+                    i if i.len() < 2 => {
                         println!("Entered password too short.");
                         {};
                     },
@@ -182,22 +189,22 @@ pub async fn new_user_input() {
         }).await;
 
         match response {
-            Ok(r) => println!("New user created."),
+            Ok(_) => println!("New user created."),
             Err(e) => println!("{}", e),
         };
 }
 
 async fn chat_menu() {
-    println!("Enter: 'chats', 'new', or 'exit'");
-
+    println!("Logged user: {}", LOGGED.load(Ordering::Relaxed));
     loop {
+        println!("Enter: 'chats', 'new', or 'exit'");
         let mut input = String::new();
 
         io::stdin().read_line(&mut input).await;
 
         match input.trim() {
             "back" => break,
-            "chats" => chat_select().await,
+           // "chats" => chat_select().await,
             "new" => chat_new().await,
             _ => {},
         };
@@ -205,55 +212,62 @@ async fn chat_menu() {
 
 }
 
-async fn chat_select() {
-    let logged_user = LOGGED.load(Ordering::Relaxed);
-
-    println!("Select chat:");
-
-    let mut input = String::new();
-    let chats = requests::get_chats(logged_user).await;
-    
-    let chat = match chats {
-        Ok(c) => c,
-        Err(m) => {
-            println!("{}", m);
-            return;
-        },
-    };
-
-    for c in chat.iter() {
-        println!("{}", c);
-    };
-
-    loop {
-        println!("Select chat, or type 'back'");
-
-        io::stdin().read_line(&mut input).await;
-
-        let selection = match input.trim() {
-            "back" => return,
-            sel => sel,
-        };
-        
-        let select: u64 = selection.parse().unwrap();
-        
-        if chat.contains(&select) {
-            //cui::chatting(select);
-            println!("{}", select);
-        };
-    };
-}
+//async fn chat_select() {
+//    let logged_user = LOGGED.load(Ordering::Relaxed);
+//
+//    println!("Select chat:");
+//
+//    let mut input = String::new();
+//    let chats = requests::get_chats(logged_user).await;
+//    
+//    let chat = match chats {
+//        Ok(c) => c,
+//        Err(m) => {
+//            println!("{}", m);
+//            return;
+//        },
+//    };
+//
+//    for c in chat.iter() {
+//        println!("{}", c);
+//    };
+//
+//    loop {
+//        println!("Select chat, or type 'back'");
+//
+//        io::stdin().read_line(&mut input).await;
+//
+//        let selection = match input.trim() {
+//            "back" => return,
+//            sel => sel,
+//        };
+//        
+//        let select: u64 = selection.parse().unwrap();
+//        
+//        if chat.contains(&select) {
+//            //cui::chatting(select);
+//            println!("{}", select);
+//        };
+//    };
+//}
 
 async fn chat_new() {
-    println!("Enter recipients");
+    println!("Enter recipients:");
 
     let mut input = String::new();
     
     io::stdin().read_line(&mut input).await;
 
-    let user = LOGGED.load(Ordering::Relxed);
+    let input = String::from(input.trim().to_lowercase());
 
-    let newchat = requests::put_new_chat();
+    let user = LOGGED.load(Ordering::Relaxed);
+
+    let newchat = requests::put_new_chat(user, input).await;
+
+    match newchat {
+        Ok(m) => println!("{}", m),
+        Err(e) => println!("{}", e),
+    };
 
 }
 

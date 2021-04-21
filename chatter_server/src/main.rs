@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::ErrorKind;
 #[macro_use] extern crate serde_json;
 #[macro_use] extern crate log;
 use actix_web::{get, web, App, Error, HttpResponse, HttpServer, Responder, Result as ActixResult};
@@ -9,7 +8,7 @@ use mysql::*;
 use mysql::prelude::*;
 
 mod db_layer;
-use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id, LoginUser };
+use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id, LoginUser, NewChatroom };
 
 
 async fn home() -> Result<HttpResponse> {
@@ -65,11 +64,16 @@ async fn user_new(pool: web::Data<mysql::Pool>, body: web::Json<NewUserPayload>)
 
     return Ok(HttpResponse::Ok().json(json!({
         "success": true,
-        "message" : User {
-            username: inserted.username,
-            id: inserted.id,
-        },
+        "message" : "Inserted user",
     })));
+
+    //return Ok(HttpResponse::Ok().json(json!({
+    //    "success": true,
+    //    "message" : User {
+    //        username: inserted.username,
+    //        id: inserted.id,
+    //    },
+    //})));
 }
 
 async fn user_login(pool: web::Data<mysql::Pool>, user: web::Json<NewUserPayload>) -> ActixResult<HttpResponse> {
@@ -88,27 +92,41 @@ async fn user_login(pool: web::Data<mysql::Pool>, user: web::Json<NewUserPayload
     let login = web::block(move || 
         db_layer::login(&mut conn, user.into_inner())).await;
 
-
-    let login = match login {
+    match login {
         Ok(l) => return Ok(HttpResponse::Ok().json(json!({
+            "message": l.id.to_string(),
             "success": true,
-            "message": l,
         }))),
-        Err(e) =>  match e {
-            actix_web::error::BlockingError => return Ok(HttpResponse::InternalServerError().json(json!({
+        Err(_) => {
+            info!("Login BadRequest!");
+            return Ok(HttpResponse::BadRequest().json(json!({
                 "success": false,
-                "message": "Internal server error: internal database error.",
-            }))),
-            other_error => return Ok(HttpResponse::BadRequest().json(json!({
-                "success": false,
-                "message": other_error
-            }))),
+                "message": "Internal server error (login)."
+            })));
         },
     };
+
+    //let login = match login {
+    //    Ok(l) => return Ok(HttpResponse::Ok().json(json!({
+    //        "success": true,
+    //        "message": l,
+    //    }))),
+    //    Err(e) =>  match e {
+    //        actix_web::error::BlockingError => return Ok(HttpResponse::InternalServerError().json(json!({
+    //            "success": false,
+    //            "message": "Internal server error: internal database error.",
+    //        }))),
+    //        other_error => return Ok(HttpResponse::BadRequest().json(json!({
+    //            "success": false,
+    //            "message": other_error
+    //        }))),
+    //    },
+    //};
 }
 
-async fn new_chat(pool: web::Data<mysql::Pool>, chat: web::Json<NewMessage>) -> ActixResult<HttpResponse> {
-    let mut conn = pool.get_conn();
+async fn new_chat(pool: web::Data<mysql::Pool>, chat: web::Json<NewChatroom>) -> ActixResult<HttpResponse> {
+    info!("Attempting to create new chattroom from user #:{}, to user:{}", &chat.u_id_1, &chat.u_name_2);
+    let conn = pool.get_conn();
 
     let mut conn = match conn {
         Ok(c) => c,
@@ -119,7 +137,7 @@ async fn new_chat(pool: web::Data<mysql::Pool>, chat: web::Json<NewMessage>) -> 
     };
 
     let newchat = web::block(move || 
-        db_layer::insert_message(&mut conn, chat.into_inner()
+        db_layer::insert_chatroom(&mut conn, chat.into_inner()
     )).await;
 
     match newchat {
@@ -135,7 +153,7 @@ async fn new_chat(pool: web::Data<mysql::Pool>, chat: web::Json<NewMessage>) -> 
 }
 
 async fn get_chats(pool: web::Data<mysql::Pool>, user: web::Json<Id>) -> ActixResult<HttpResponse> {
-    let mut conn = pool.get_conn();
+    let conn = pool.get_conn();
 
     let mut conn = match conn {
         Ok(c) => c,
@@ -237,6 +255,7 @@ async fn push_message(pool: web::Data<mysql::Pool>, message: web::Json<NewMessag
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
+    println!{"hello"};
     env_logger::init();
     info!("Starting the server...");
 
@@ -252,9 +271,10 @@ async fn main() -> std::io::Result<()> {
         .route("/user/chats", web::get().to(get_chats))
         .route("/message/new", web::put().to(push_message))
         .route("/message/new_chat", web::put().to(new_chat))
-        //.route("/message/chatting", web::get().to(get_messages))
     })
         .bind("0.0.0.0:8088")?
         .run()
         .await
 }
+
+        //.route("/message/chatting", web::get().to(get_messages))

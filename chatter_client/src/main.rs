@@ -7,23 +7,13 @@ mod events;
 
 static LOGGED: AtomicU64 = AtomicU64::new(0);
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), reqwest::Error> {
 
    requests::test_connection().await;
-/*
-    let test = requests::test_connection();
 
-    match test {
-        Ok(r) => println!("Connected to server."),
-        Err(e) => panic!("Could not connect to the server."),
-    };
-*/
     utils::menu().await;
-    
+
     //cui::chatting().await;
-
-    
-
     Ok(())
 }
