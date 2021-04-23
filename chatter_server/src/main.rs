@@ -79,7 +79,7 @@ async fn user_new(pool: web::Data<mysql::Pool>, body: web::Json<NewUserPayload>)
 async fn user_login(pool: web::Data<mysql::Pool>, user: web::Json<NewUserPayload>) -> ActixResult<HttpResponse> {
     info!("Attempting to login user: {:?}", &user.username);
 
-    let mut conn = pool.get_conn();
+    let conn = pool.get_conn();
 
     let mut conn = match conn {
         Ok(c) => c,
@@ -153,6 +153,7 @@ async fn new_chat(pool: web::Data<mysql::Pool>, chat: web::Json<NewChatroom>) ->
 }
 
 async fn get_chats(pool: web::Data<mysql::Pool>, user: web::Json<Id>) -> ActixResult<HttpResponse> {
+    info!("Getting chats for user id: {}", &user.id);
     let conn = pool.get_conn();
 
     let mut conn = match conn {
@@ -162,6 +163,8 @@ async fn get_chats(pool: web::Data<mysql::Pool>, user: web::Json<Id>) -> ActixRe
             "message": "Internal server error: could not connect to database",
         }))),
     };
+
+    let user = user.into_inner();
 
     let chat_list = web::block(move ||
         db_layer::user_chats(&mut conn, user.id)
@@ -178,9 +181,9 @@ async fn get_chats(pool: web::Data<mysql::Pool>, user: web::Json<Id>) -> ActixRe
     if chat_list.is_err() {
         return Ok(HttpResponse::BadRequest().json(json!({
                     "success": false,
-                    "message": chat_list.unwrap(),
+                    "message": "There is an error from the database.",
                 })))
-    }
+    };
 
     let chats: HashMap<u64, String> = chat_list.unwrap();
 
@@ -194,7 +197,7 @@ async fn get_chats(pool: web::Data<mysql::Pool>, user: web::Json<Id>) -> ActixRe
             "success": true,
             "message": json!(chats),
         })));
-    }
+    };
 }
 
 //async fn get_messages(pool: web::Data<mysql::Pool>, c_id: web::Json<u64>) -> ActixResult<HttpResponse> {
@@ -268,7 +271,7 @@ async fn main() -> std::io::Result<()> {
         .route("/test", web::get().to(test))
         .route("/user/new", web::put().to(user_new))
         .route("/user/login", web::post().to(user_login))
-        .route("/user/chats", web::get().to(get_chats))
+        .route("/user/chats", web::post().to(get_chats))
         .route("/message/new", web::put().to(push_message))
         .route("/message/new_chat", web::put().to(new_chat))
     })

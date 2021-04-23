@@ -17,7 +17,8 @@ struct ServResponse {
 
 #[derive(Serialize, Deserialize)]
 struct ChatHash {
-        c_list: HashMap<u64, String>,
+        success: bool,
+        message: HashMap<u64, String>,
 }
 
 
@@ -106,8 +107,7 @@ pub async fn request_login(user: utils::NewUserPayload) -> Result<String, String
 pub async fn get_chats(id: u64) -> Result<HashMap<u64, String>, String> {
         let client = reqwest::Client::new();
   
-        
-        let res = client.post("http/://chatter-server:8088/user/chats")
+        let res = client.post("http://chatter-server:8088/user/chats")
                 .header("Content-Type", "application/json")
                 .body(json!({
                         "id": id,
@@ -117,36 +117,41 @@ pub async fn get_chats(id: u64) -> Result<HashMap<u64, String>, String> {
                 .send()
                 .await;
         
-        let payload = match res {
-                Ok(r) => r.text().await,
+        let res = match res {
+                Ok(r) => r,
                 Err(_) => {
                         let err_m = String::from("Server connection error.");
                         return Err(err_m);
                 },
         };
-
-        let payload = match payload {
-                Ok(r) => r,
-                Err(_) => {
-                        let err_m = String::from("Error in response body.");
-                        return Err(err_m);
+        //let response = res.copy();        
+        //println!("{}", &res.text().await.unwrap());
+        match res.status().as_str() {
+                "200" => match res.text().await {
+                                Ok(p) => match serde_json::from_str::<ChatHash>(&p) {
+                                        Ok(c) => return Ok(c.message),
+                                        Err(_) => return Err(String::from("Error serializing web json")),
+                                },
+                                Err(_) => return Err(String::from("Error in response body.")),
                 },
-        };
-
-        let chats: ServResponse = serde_json::from_str(&payload.to_string()).expect("something went wrong serializing web json");
-
-
-        let pkg: Result<ChatHash, serde_json::Error> =  match chats.success {
-                true => serde_json::from_str(&chats.message),
-                false => {
-                        let err_m = String::from("Error retrieving chat list");
-                        return Err(err_m);
+                "400" | "404" => match res.text().await {
+                                Ok(r) => match serde_json::from_str::<ServResponse>(&r) {
+                                        Ok(s) => return Err(s.message),
+                                        Err(_) => return Err(String::from("Error serializing web json.")),
+                                },
+                                Err(_) => return Err(String::from("Error in response body.")),
                 },
-        };
-
-        match pkg {
-                Ok(p) => return Ok(p.c_list),
-                Err(_) => return Err(String::from("Error serializing chat hashmap.")),
+                "500" => match res.text().await {
+                                Ok(r) => match serde_json::from_str::<ServResponse>(&r) {
+                                        Ok(s) => return Err(s.message),
+                                        Err(_) => return Err(String::from("Error serializing web json.")),
+                                },
+                                Err(_) => return Err(String::from("Error in response body.")),
+                },
+                p => {
+                        println!{"{}", p};
+                        return Err(String::from("Server response not recognized."));
+                },
         };
 }
 
@@ -177,7 +182,7 @@ pub async fn put_new_chat(user_1: u64, user_2: String) -> Result<String, String>
         };
 
         println!("{}", payload);
-        
+
         let payload: ServResponse = serde_json::from_str(&payload).expect("Error in serializing web response.");
 
         match payload.success {

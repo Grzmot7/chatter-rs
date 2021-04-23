@@ -147,31 +147,30 @@ pub fn insert_chatroom(conn: &mut mysql::PooledConn, chat: NewChatroom) -> std::
 //}
 
 pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<HashMap<u64, String>, String> {
-    let username: Result<Option<u64>> = conn.exec_first(
+    let username: Result<Option<String>> = conn.exec_first(
         "SELECT username FROM users WHERE u_id=:user",
         params! {
-            "u_id" => id,
+            "user" => id,
         }
     );
-
+    
     let username = match username {
-        Ok(u) => u,
+        Ok(u) => match u {
+            Some(n) => n,
+            None => return Err(String::from("Author not recognized.")),
+        },
         Err(_) => return Err(String::from("Database error.")),
     };
 
-    if let Some(n) = username {
-        username.unwrap();
-    } else {
-        return Err(String::from("Author not recognized.") );
-    };
+    info!("Selecting chatrooms for user: {}", &username);
 
-    let mut stmt = conn.prep(
+    let stmt = conn.prep(
         "SELECT c_id FROM chatrooms WHERE user_1=:user OR user_2=:user"
     ).unwrap();
 
     let user_chats: Result<Vec<u64>> = conn.exec(stmt, 
         params! {
-            "user" => username,
+            "user" => &username,
         }
     );
 
@@ -184,8 +183,10 @@ pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<
         return Err(String::from("User does not have any chats yet."));
     };
 
-    let mut stmt = conn.prep(
-        "SELECT (user_1, user_2) FROM chatrooms WHERE user_1=:user OR user_2=:user"
+    info!("User {} has {} chats", &username, user_chats.len());
+
+    let stmt = conn.prep(
+        "SELECT user_1, user_2 FROM chatrooms WHERE user_1=:user OR user_2=:user"
     ).unwrap();
 
     let participents: Result<Vec<(String, String)>> = conn.exec(stmt, 

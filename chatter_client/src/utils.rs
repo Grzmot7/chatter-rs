@@ -204,7 +204,7 @@ async fn chat_menu() {
 
         match input.trim() {
             "back" => break,
-           // "chats" => chat_select().await,
+            "chats" => chat_select().await,
             "new" => chat_new().await,
             _ => {},
         };
@@ -212,44 +212,44 @@ async fn chat_menu() {
 
 }
 
-//async fn chat_select() {
-//    let logged_user = LOGGED.load(Ordering::Relaxed);
-//
-//    println!("Select chat:");
-//
-//    let mut input = String::new();
-//    let chats = requests::get_chats(logged_user).await;
-//    
-//    let chat = match chats {
-//        Ok(c) => c,
-//        Err(m) => {
-//            println!("{}", m);
-//            return;
-//        },
-//    };
-//
-//    for c in chat.iter() {
-//        println!("{}", c);
-//    };
-//
-//    loop {
-//        println!("Select chat, or type 'back'");
-//
-//        io::stdin().read_line(&mut input).await;
-//
-//        let selection = match input.trim() {
-//            "back" => return,
-//            sel => sel,
-//        };
-//        
-//        let select: u64 = selection.parse().unwrap();
-//        
-//        if chat.contains(&select) {
-//            //cui::chatting(select);
-//            println!("{}", select);
-//        };
-//    };
-//}
+async fn chat_select() {
+    let logged_user = LOGGED.load(Ordering::Relaxed);
+
+    println!("Select chat:");
+
+    //let mut input = String::new();
+    let chats = requests::get_chats(logged_user).await;
+    
+    let chat = match chats {
+        Ok(c) => c,
+        Err(m) => {
+            println!("{}", m);
+            return;
+        },
+    };
+
+    for c in chat.iter() {
+        println!("{:?}", c);
+    };
+
+    //loop {
+    //    println!("Select chat, or type 'back'");
+    //
+    //    io::stdin().read_line(&mut input).await;
+    //
+    //    let selection = match input.trim() {
+    //        "back" => return,
+    //        sel => sel,
+    //    };
+    //    
+    //    let select: u64 = selection.parse().unwrap();
+    //    
+    //    if chat.contains(&select) {
+    //        //cui::chatting(select);
+    //        println!("{}", select);
+    //    };
+    //};
+}
 
 async fn chat_new() {
     println!("Enter recipients:");
@@ -268,7 +268,6 @@ async fn chat_new() {
         Ok(m) => println!("{}", m),
         Err(e) => println!("{}", e),
     };
-
 }
 
 pub fn exit() {

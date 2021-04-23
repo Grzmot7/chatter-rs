@@ -15,5 +15,6 @@ async fn main() -> Result<(), reqwest::Error> {
     utils::menu().await;
 
     //cui::chatting().await;
+    
     Ok(())
 }
