@@ -13,7 +13,12 @@
 #[allow(dead_code)]
 
 use crate::events::{Event, Events};
+use crate::requests;
 use std::{error::Error, io};
+use std::sync::{ Mutex, Arc };
+use std::sync::atomic::{ AtomicBool, Ordering };
+use std::time::Duration;
+use tokio::task;
 
 use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
@@ -38,7 +43,7 @@ struct App {
     /// Current input mode
     input_mode: InputMode,
     /// History of recorded messages
-    messages: Vec<String>,
+    messages: Vec<(String, String)>,
 }
 
 impl Default for App {
@@ -51,7 +56,7 @@ impl Default for App {
     }
 }
 
-pub async fn chatting() -> Result<(), Box<dyn Error>> {
+pub async fn chatting(c_id: u64, user: u64) -> Result<(), Box<dyn Error>> {
     // Terminal initialization
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = MouseTerminal::from(stdout);
@@ -64,6 +69,65 @@ pub async fn chatting() -> Result<(), Box<dyn Error>> {
 
     // Create default app state
     let mut app = App::default();
+
+
+    // Message retrieval task
+    let mess: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+    let mess1 = mess.clone();
+    let c_id_1 = c_id.clone();
+    
+    task::spawn( async move { loop {
+
+        mess1.lock().unwrap().drain(..);
+
+        let messages = requests::get_messages(c_id_1).await;
+        
+        let messages = match messages {
+            Ok(m) => m,
+            Err(_) => panic!("Thread failed."),
+        };
+
+        //let chat_messages = vec![
+        //    (String::from("one"), String::from("b be messages.")),
+        //    (String::from("a"), String::from("b be messages.")),
+        //    (String::from("a"), String::from("b be messages.")),
+        //    (String::from("a"), String::from("b be messages.")),
+        //    (String::from("a"), String::from("b be messages.")),
+        //];
+
+        for m in messages {
+            mess1.lock().unwrap().push(m);
+        }
+
+        async_std::task::sleep(Duration::from_millis(500)).await;
+
+        //mess1.lock().unwrap().push((String::from("message"), String::from("hello")));
+    }});
+
+    // Message post task
+    let switch = Arc::new(AtomicBool::new(false));
+    let switch_1 = switch.clone();
+
+
+    let c_id_2 = c_id.clone();
+    let author = user.clone();
+    let post: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    let post_1 = post.clone();
+
+    task::spawn( async move { loop {
+        if switch_1.load(Ordering::Relaxed) == true {
+            switch_1.store(false, Ordering::Relaxed);
+            let message = post_1.lock().unwrap().to_string();
+
+            requests::post_message(message, author, c_id_2).await;
+
+            post_1.lock().unwrap().drain(..);
+        }
+
+        async_std::task::sleep(Duration::from_millis(125)).await;
+    }});
+    
+    
 
     loop {
         // Draw UI
@@ -118,7 +182,7 @@ pub async fn chatting() -> Result<(), Box<dyn Error>> {
             match app.input_mode {
                 InputMode::Normal =>
                     // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-                    {}
+                    {},
 
                 InputMode::Editing => {
                     // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
@@ -128,12 +192,28 @@ pub async fn chatting() -> Result<(), Box<dyn Error>> {
                         // Move one line down, from the border to the input line
                         chunks[2].y + 1,
                     )
-                }
+                },
             }
-            let messages: Vec<ListItem> = app
-                .messages
+            
+           // let mut chat_messages: Vec<(String, String)> = mess.lock().unwrap().drain(..).collect();
+            
+            //let chat_messages = vec![
+            //    (String::from("one"), String::from("b be messages.")),
+            //    (String::from("a"), String::from("b be messages.")),
+            //    (String::from("a"), String::from("b be messages.")),
+            //    (String::from("a"), String::from("b be messages.")),
+            //    (String::from("a"), String::from("b be messages.")),
+            //];
+            let mut chat_messages: Vec<(String, String)> = Vec::new();
+
+            for message in mess.lock().unwrap().iter() {
+                chat_messages.push((message.0.clone(), message.1.clone()));
+            };
+
+            let messages: Vec<ListItem> = 
+                chat_messages
                 .iter()
-                .enumerate()
+                .rev()
                 .map(|(i, m)| {
                     let content = vec![Spans::from(Span::raw(format!("{}: {}", i, m)))];
                     ListItem::new(content)
@@ -143,6 +223,8 @@ pub async fn chatting() -> Result<(), Box<dyn Error>> {
                 List::new(messages).block(Block::default().borders(Borders::ALL).title("Messages"));
             f.render_widget(messages, chunks[0]);
         })?;
+
+
         // Handle input
         if let Event::Input(input) = events.next().await? {
             match app.input_mode {
@@ -158,7 +240,11 @@ pub async fn chatting() -> Result<(), Box<dyn Error>> {
                 },
                 InputMode::Editing => match input {
                     Key::Char('\n') => {
-                        app.messages.push(app.input.drain(..).collect());
+                        //app.messages.push(app.input.drain(..).collect::<String>());
+                        //post.lock().unwrap().push(app.input.drain(..).collect::<String>());
+                        let m = app.input.drain(..).collect::<String>();
+                        post.lock().unwrap().push_str(&m.as_str());
+                        switch.store(true, Ordering::Relaxed);
                     }
                     Key::Char(c) => {
                         app.input.push(c);

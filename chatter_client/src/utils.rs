@@ -204,15 +204,14 @@ async fn chat_menu() {
 
         match input.trim() {
             "back" => break,
-            "chats" => chat_select().await,
+            "chats" => chat_display().await,
             "new" => chat_new().await,
             _ => {},
         };
     };
-
 }
 
-async fn chat_select() {
+async fn chat_display() {
     let logged_user = LOGGED.load(Ordering::Relaxed);
 
     println!("Select chat:");
@@ -232,23 +231,49 @@ async fn chat_select() {
         println!("{:?}", c);
     };
 
-    //loop {
-    //    println!("Select chat, or type 'back'");
-    //
-    //    io::stdin().read_line(&mut input).await;
-    //
-    //    let selection = match input.trim() {
-    //        "back" => return,
-    //        sel => sel,
-    //    };
-    //    
-    //    let select: u64 = selection.parse().unwrap();
-    //    
-    //    if chat.contains(&select) {
-    //        //cui::chatting(select);
-    //        println!("{}", select);
-    //    };
-    //};
+    let selection: u64 = chat_select(chat).await;
+
+    match selection {
+        0 => return,
+        _ => {},
+    };
+    let c_id = selection.clone();
+    
+    let messages = requests::get_messages(selection).await.unwrap();
+    
+    
+    for mess in messages {
+        println!("{:?}", mess);
+    }
+    let mut input = String::new();
+
+    io::stdin().read_line(&mut input).await;
+
+    cui::chatting(c_id, logged_user).await;
+}
+    
+async fn chat_select(chats: HashMap<u64, String>) -> u64 {
+    loop {
+        println!("Select conversation, or type 'back'.");
+
+        let mut input = String::new();
+
+        io::stdin().read_line(&mut input).await;
+
+        
+        match input.to_lowercase().trim() {
+            "back" => return 0,
+            _ => {},
+        };
+
+        for (c_id, recip) in chats.iter() {
+            println!("{} {}", c_id, recip);
+            if &recip.trim().to_string() == &input.to_lowercase().trim() {
+                println!("Selected: {}", c_id);
+                return *c_id;
+            }
+        }
+    }
 }
 
 async fn chat_new() {

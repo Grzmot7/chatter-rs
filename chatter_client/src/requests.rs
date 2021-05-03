@@ -21,6 +21,12 @@ struct ChatHash {
         message: HashMap<u64, String>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Messages {
+        success: bool,
+        message: Vec<(String, String)>,
+}
+
 
 pub async fn request_new_user(user: utils::NewUserPayload) -> Result<String, String> {
         let client = reqwest::Client::new();
@@ -40,7 +46,8 @@ pub async fn request_new_user(user: utils::NewUserPayload) -> Result<String, Str
                 Err(_) => return Err(String::from("Server response error.")),
         };
 
-        println!("{}", res);   
+        println!("{}", res);
+
         let payload: Result<ServResponse, serde_json::Error> = serde_json::from_str(&res.to_string());
 
         let payload = match payload {
@@ -192,18 +199,64 @@ pub async fn put_new_chat(user_1: u64, user_2: String) -> Result<String, String>
 
 }
 
-pub async fn post_message(message: utils::NewMessage) {
+pub async fn post_message(message: String, author: u64, c_id: u64) {
         let client = reqwest::Client::new();
-        let res = client.post("http//chatter-server:8088/chat/post_message")
-                .header("Content_Type", "applications/json")
+        let res = client.put("http://chatter-server:8088/message/new")
+                .header("Content-Type", "application/json")
                 .body(json!(
                         {
-                        "c_id": message.c_id,
-                        "message": message.message,
-                        "author": message.username,
+                        "c_id": c_id,
+                        "message": message,
+                        "author": author,
                         }
                 ).to_string())
                 .send()
                 .await
                 .unwrap();
+}
+
+pub async fn get_messages(c_id: u64) -> Result<Vec<(String, String)>, String> {
+        let client = reqwest::Client::new();
+        let res = client.post("http://chatter-server:8088/message/get_messages")
+                .header("Content-Type", "application/json")
+                .body(json!({
+                        "id": c_id,
+                })
+                .to_string())
+                .send()
+                .await;
+        
+        let res = match res {
+                Ok(r) => r,
+                Err(_) => return Err(String::from("Error contacting server.")),
+        };
+
+
+        match res.status().as_str() {
+                "200" => match res.text().await {
+                                Ok(p) => match serde_json::from_str::<Messages>(&p) {
+                                        Ok(c) => return Ok(c.message),
+                                        Err(_) => return Err(String::from("Error serializing web json")),
+                                },
+                                Err(_) => return Err(String::from("Error in response body.")),
+                },
+                "400" | "404" => match res.text().await {
+                                Ok(r) => match serde_json::from_str::<ServResponse>(&r) {
+                                        Ok(s) => return Err(s.message),
+                                        Err(_) => return Err(String::from("Error serializing web json.")),
+                                },
+                                Err(_) => return Err(String::from("Error in response body.")),
+                },
+                "500" => match res.text().await {
+                                Ok(r) => match serde_json::from_str::<ServResponse>(&r) {
+                                        Ok(s) => return Err(s.message),
+                                        Err(_) => return Err(String::from("Error serializing web json.")),
+                                },
+                                Err(_) => return Err(String::from("Error in response body.")),
+                },
+                p => {
+                        println!{"{}", p};
+                        return Err(String::from("Server response not recognized."));
+                },
+        };
 }

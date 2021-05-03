@@ -8,7 +8,7 @@ use mysql::*;
 use mysql::prelude::*;
 
 mod db_layer;
-use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id, LoginUser, NewChatroom };
+use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id, LoginUser, NewChatroom, ChatWith };
 
 
 async fn home() -> Result<HttpResponse> {
@@ -200,29 +200,39 @@ async fn get_chats(pool: web::Data<mysql::Pool>, user: web::Json<Id>) -> ActixRe
     };
 }
 
-//async fn get_messages(pool: web::Data<mysql::Pool>, c_id: web::Json<u64>) -> ActixResult<HttpResponse> {
-//    let mut conn = pool.get_conn().unwrap();
-//
-//    let messages = web::block(move || 
-//        db_layer::show_messages(&mut conn, c_id)
-//    ).await;
-//
-//    match messages {
-//        Ok(m) => return Ok(HttpResponse::Ok().json(json!({
-//            "success": true,
-//            "messages": messages,
-//        }))),
-//        Err(_) => return Ok(HttpResponse::BadRequest().json(json!({
-//            "success": false,
-//            "message": "error retrieving messages",
-//        }))),
-//    };
-//}
+async fn get_messages(pool: web::Data<mysql::Pool>, c_id: web::Json<Id>) -> ActixResult<HttpResponse> {
+    //info!("Message request, c_id {}", &c_id.id);
+
+    let mut conn = pool.get_conn().unwrap();
+
+    let messages = web::block(move || 
+        db_layer::select_messages(&mut conn, c_id.id)
+    ).await;
+    
+    //let messages = match messages {
+    //    Ok(m) => m,
+    //    Err(e) => return Ok(HttpResponse::InternalServerError().json(json!({
+    //        "sucess": false,
+    //        "message": e,
+    //    }))),
+    //};
+
+    match messages {
+        Ok(m) => return Ok(HttpResponse::Ok().json(json!({
+            "success": true,
+            "message": m,
+        }))),
+        Err(_) => return Ok(HttpResponse::BadRequest().json(json!({
+            "success": false,
+            "message": "Error",
+        }))),
+    };
+}
 
 async fn push_message(pool: web::Data<mysql::Pool>, message: web::Json<NewMessage>) -> ActixResult<HttpResponse> {
     info!("Attempting to insert message for chat: {:?}", &message.c_id);
 
-    let mut conn = pool.get_conn();
+    let conn = pool.get_conn();
 
     let mut conn = match conn {
         Ok(c) => c,
@@ -253,7 +263,6 @@ async fn push_message(pool: web::Data<mysql::Pool>, message: web::Json<NewMessag
     //    "success": false,
     //    "message": "error inserting chat"
     //})));
-
 }
 
 #[actix_rt::main]
@@ -274,6 +283,7 @@ async fn main() -> std::io::Result<()> {
         .route("/user/chats", web::post().to(get_chats))
         .route("/message/new", web::put().to(push_message))
         .route("/message/new_chat", web::put().to(new_chat))
+        .route("/message/get_messages", web::post().to(get_messages))
     })
         .bind("0.0.0.0:8088")?
         .run()

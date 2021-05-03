@@ -5,9 +5,9 @@ use std::sync::{
     Arc,
 };
 use std::time::Duration;
-use async_std::{task, io};
-use async_std::channel;
+use async_std::{ io, channel };
 
+use tokio::task;
 use termion::event::Key;
 use termion::input::TermRead;
 
@@ -72,7 +72,7 @@ impl Events {
                     if tx.send(Event::Tick).await.is_err() {
                         break;
                     }
-                    task::sleep(config.tick_rate).await;
+                    async_std::task::sleep(config.tick_rate).await;
                 }
             })
         };

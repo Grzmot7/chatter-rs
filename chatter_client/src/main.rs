@@ -12,9 +12,10 @@ async fn main() -> Result<(), reqwest::Error> {
 
    requests::test_connection().await;
 
+
     utils::menu().await;
 
     //cui::chatting().await;
-    
+
     Ok(())
 }

@@ -67,15 +67,36 @@ pub struct NewChat {
     pub u_name_2: String,
 }
 
-pub fn insert_message(conn: &mut mysql::PooledConn, msg: NewMessage) -> Result<u64> {
-    conn.exec_drop(
-        "INSERT INTO messages (message, author, c_id) VALUES (message=:message, author=:author, c_id=:c_id)",
-        params!{
-            "message" => &msg.message,
-            "author" => &msg.author,
-            "c_id" => &msg.c_id,
+#[derive(Serialize, Deserialize)]
+pub struct ChatWith {
+    pub u_id: u64,
+    pub c_id: u64,
+}
+
+pub fn insert_message(conn: &mut mysql::PooledConn, msg: NewMessage) -> std::result::Result<u64, String> {
+    let username: Result<Option<String>> = conn.exec_first(
+        "SELECT username FROM users WHERE u_id=:user",
+        params! {
+            "user" => &msg.author,
         }
     );
+
+    let username = match username {
+        Ok(u) => match u {
+            Some(n) => n,
+            None => return Err(String::from("Author not recognized.")),
+        },
+        Err(_) => return Err(String::from("Database error.")),
+    };
+    
+    conn.exec_drop(
+        "INSERT INTO messages (c_id, author, chat_message) VALUES (:c_id, :author, :message)",
+        params!{
+            "c_id" => &msg.c_id,
+            "author" => &username,
+            "message" => &msg.message,
+        }
+    ).unwrap();
 
     Ok(conn.last_insert_id())
 }
@@ -88,7 +109,7 @@ pub fn insert_chatroom(conn: &mut mysql::PooledConn, chat: NewChatroom) -> std::
             "user" => chat.u_id_1,
         }
     );
-
+    
     let user = match user {
         Ok(r) => match r {
             Some(u) => u,
@@ -130,21 +151,22 @@ pub fn insert_chatroom(conn: &mut mysql::PooledConn, chat: NewChatroom) -> std::
     };
 }
 
-//pub fn select_messages(conn: &mut mysql::PooledConn, c_id: u64) -> std::result::Result<Vec<Messages>, mysql::error::Error> {
-//    let mut stmt = conn.prep(
-//        "SELECT m_id, chat_message, author FROM messages WHERE c_id=:c_id ORDER BY m_id LIMIT 10"
-//    );
-//
-//    conn.exec_map(&stmt, 
-//        params! {
-//            "c_id" => c_id,
-//        },
-//        |(m_id, message, author)| Messages {
-//            message: message,
-//            author: author,
-//        }
-//    )
-//}
+pub fn select_messages(conn: &mut mysql::PooledConn, c_id: u64) -> std::result::Result<Vec<(String, String)>, String> {
+    let mut stmt = conn.prep(
+        "SELECT author, chat_message FROM messages WHERE c_id=:c_id ORDER BY m_id DESC LIMIT 10"
+    ).unwrap();
+
+    let messages: Result<Vec<(String, String)>> = conn.exec(stmt, 
+        params! {
+            "c_id" => c_id, 
+        }
+    );
+
+    match messages {
+        Ok(m) => return Ok(m),
+        Err(_) => return Err(String::from("Query error.")),
+    };
+}
 
 pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<HashMap<u64, String>, String> {
     let username: Result<Option<String>> = conn.exec_first(
