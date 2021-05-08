@@ -6,6 +6,7 @@ mod cui;
 mod events;
 
 static LOGGED: AtomicU64 = AtomicU64::new(0);
+static SALT: &'static str = "Totally secure s";
 
 #[tokio::main]
 async fn main() -> Result<(), reqwest::Error> {

@@ -1,14 +1,3 @@
-/// A simple example demonstrating how to handle user input. This is
-/// a bit out of the scope of the library as it does not provide any
-/// input handling out of the box. However, it may helps some to get
-/// started.
-///
-/// This is a very simple example:
-///   * A input box always focused. Every character you type is registered
-///   here
-///   * Pressing Backspace erases a character
-///   * Pressing Enter pushes the current input in the history of previous
-///   messages
 
 #[allow(dead_code)]
 
@@ -87,21 +76,12 @@ pub async fn chatting(c_id: u64, user: u64) -> Result<(), Box<dyn Error>> {
             Err(_) => panic!("Thread failed."),
         };
 
-        //let chat_messages = vec![
-        //    (String::from("one"), String::from("b be messages.")),
-        //    (String::from("a"), String::from("b be messages.")),
-        //    (String::from("a"), String::from("b be messages.")),
-        //    (String::from("a"), String::from("b be messages.")),
-        //    (String::from("a"), String::from("b be messages.")),
-        //];
-
         for m in messages {
             mess1.lock().unwrap().push(m);
         }
 
         async_std::task::sleep(Duration::from_millis(500)).await;
 
-        //mess1.lock().unwrap().push((String::from("message"), String::from("hello")));
     }});
 
     // Message post task
@@ -127,8 +107,6 @@ pub async fn chatting(c_id: u64, user: u64) -> Result<(), Box<dyn Error>> {
         async_std::task::sleep(Duration::from_millis(125)).await;
     }});
     
-    
-
     loop {
         // Draw UI
         terminal.draw(|f| {
@@ -195,15 +173,6 @@ pub async fn chatting(c_id: u64, user: u64) -> Result<(), Box<dyn Error>> {
                 },
             }
             
-           // let mut chat_messages: Vec<(String, String)> = mess.lock().unwrap().drain(..).collect();
-            
-            //let chat_messages = vec![
-            //    (String::from("one"), String::from("b be messages.")),
-            //    (String::from("a"), String::from("b be messages.")),
-            //    (String::from("a"), String::from("b be messages.")),
-            //    (String::from("a"), String::from("b be messages.")),
-            //    (String::from("a"), String::from("b be messages.")),
-            //];
             let mut chat_messages: Vec<(String, String)> = Vec::new();
 
             for message in mess.lock().unwrap().iter() {
@@ -240,8 +209,6 @@ pub async fn chatting(c_id: u64, user: u64) -> Result<(), Box<dyn Error>> {
                 },
                 InputMode::Editing => match input {
                     Key::Char('\n') => {
-                        //app.messages.push(app.input.drain(..).collect::<String>());
-                        //post.lock().unwrap().push(app.input.drain(..).collect::<String>());
                         let m = app.input.drain(..).collect::<String>();
                         post.lock().unwrap().push_str(&m.as_str());
                         switch.store(true, Ordering::Relaxed);

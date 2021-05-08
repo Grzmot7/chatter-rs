@@ -51,11 +51,6 @@ pub struct User {
     pub username: String,
 }
 
-pub struct LoginUser {
-    pub id: Option<u64>,
-    pub username: Option<String>,
-}
-
 #[derive(Deserialize)]
 pub struct Id{
     pub id: u64,
@@ -65,12 +60,6 @@ pub struct Id{
 pub struct NewChat {
     pub u_id_1: u64,
     pub u_name_2: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ChatWith {
-    pub u_id: u64,
-    pub c_id: u64,
 }
 
 pub fn insert_message(conn: &mut mysql::PooledConn, msg: NewMessage) -> std::result::Result<u64, String> {
@@ -109,7 +98,7 @@ pub fn insert_chatroom(conn: &mut mysql::PooledConn, chat: NewChatroom) -> std::
             "user" => chat.u_id_1,
         }
     );
-    
+
     let user = match user {
         Ok(r) => match r {
             Some(u) => u,
@@ -118,9 +107,11 @@ pub fn insert_chatroom(conn: &mut mysql::PooledConn, chat: NewChatroom) -> std::
         Err(_) => return Err(String::from("Database error.")),
     };
 
+    info!("User: {} is attempting to make a chat", &user);
+
     let mut stmt = conn.prep(
-        "SELECT c_id FROM chatrooms WHERE user_1 OR user_2 =:user_1
-            AND user_1 OR user_2 =:user_2"
+        "SELECT c_id FROM chatrooms WHERE (user_1=:user_1 OR user_2=:user_1)
+            AND (user_1=:user_2 OR user_2=:user_2)"
     ).unwrap();
 
     let c_id: Result<Option<u64>> = conn.exec_first(stmt, params! {
@@ -130,7 +121,10 @@ pub fn insert_chatroom(conn: &mut mysql::PooledConn, chat: NewChatroom) -> std::
 
     match c_id {
         Ok(i) => match i {
-            Some(c) => return Err(String::from("Chatroom already exists.")),
+            Some(c) => {
+                info!("A chat already exists.");
+                return Err(String::from("Chatroom already exists."));
+            },
             None =>{},
         },
         Err(_) => return Err(String::from("Database error.")),
@@ -213,7 +207,7 @@ pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<
 
     let participents: Result<Vec<(String, String)>> = conn.exec(stmt, 
         params!{
-            "user" => username,
+            "user" => &username,
         }
     );
 
@@ -223,9 +217,10 @@ pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<
     };
 
     let recips: Vec<String> = participents.iter().map(|x| 
-        match &x.0 {
-            username => x.1.to_string(),
-            _ => x.0.to_string(),
+        if x.0 == username { 
+            x.1.clone()
+        } else {
+            x.0.clone()
         }
     ).collect();
 
@@ -234,11 +229,6 @@ pub fn user_chats(conn: &mut mysql::PooledConn, id: u64) -> std::result::Result<
     Ok(chat_list)
 
 }
-
-pub fn show_messages() {
-
-}
-
 
 pub fn login(conn: &mut mysql::PooledConn, login: NewUserPayload) -> std::result::Result<User, String> {
     info!("login: user: {}, {}", &login.username, &login.password);

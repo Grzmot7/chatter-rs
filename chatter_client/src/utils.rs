@@ -5,9 +5,11 @@ use async_std::{
 use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{ Deserialize, Serialize };
 use serde_json::json;
+use bcrypt::*;
 
 use crate::requests;
 use crate::LOGGED;
+use crate::SALT;
 use crate::cui;
 
 #[derive(Deserialize, Serialize)]
@@ -32,11 +34,6 @@ pub struct NewMessage {
     pub c_id: u64,
     pub username: String,
     pub message: String,
-}
-
-pub struct LoggedUser {
-    pub id: u64,
-    pub username: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -90,7 +87,7 @@ pub async fn login_input() {
     io::stdin().read_line(&mut input2).await.unwrap();
 
     let name = &input1.trim();
-    let pass = &input2.trim();
+    let pass = hash_with_salt(&input2.trim(), 12, SALT.as_bytes()).unwrap();
 
     let login = 
         requests::request_login(NewUserPayload {
@@ -108,9 +105,6 @@ pub async fn login_input() {
             return;
         },
     };
-
-
-    return;
 }
 
 pub async fn logged_menu() {
@@ -182,14 +176,21 @@ pub async fn new_user_input() {
                     },
                 };
             };
+        
+        let pass = hash_with_salt(&pass, 12, SALT.as_bytes()).unwrap();
 
+        println!("{}", &pass.to_string());
+        
         let response = requests::request_new_user( NewUserPayload {
             username: name,
-            password: pass,
+            password: pass.to_string(),
         }).await;
 
         match response {
-            Ok(_) => println!("New user created."),
+            Ok(_) => {
+                println!("New user created.");
+                logged_menu();
+            },
             Err(e) => println!("{}", e),
         };
 }

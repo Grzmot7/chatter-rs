@@ -3,12 +3,10 @@ use std::collections::HashMap;
 #[macro_use] extern crate log;
 use actix_web::{get, web, App, Error, HttpResponse, HttpServer, Responder, Result as ActixResult};
 use actix_web::http::StatusCode;
-use serde::{Deserialize, Serialize};
 use mysql::*;
-use mysql::prelude::*;
 
 mod db_layer;
-use db_layer::{ NewUser, NewUserPayload, User, Message, Messages, NewMessage, NewChat, Id, LoginUser, NewChatroom, ChatWith };
+use db_layer::{ NewUserPayload, NewMessage, Id, NewChatroom };
 
 
 async fn home() -> Result<HttpResponse> {

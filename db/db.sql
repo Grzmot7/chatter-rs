@@ -21,6 +21,3 @@ CREATE TABLE IF NOT EXISTS messages (
   chat_message TEXT,
   KEY c_id (c_id)
 )engine=innodb;
-
-INSERT INTO users (username, pw) VALUES ("odin6066", "password123");
-INSERT INTO users (username, pw) VALUES ("mightythor", "mjolnir123");
